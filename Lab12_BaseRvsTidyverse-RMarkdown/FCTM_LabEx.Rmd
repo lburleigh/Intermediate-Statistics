@@ -1,0 +1,640 @@
+---
+title: "FCTM_LabEx"
+author: "L Burleigh"
+date: "2022-11-17"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/larn_/OneDrive - Louisiana State University/R/FCTM_Bx_v1')
+```
+
+The FCTM_bx_v1 study consists of two tasks in which participants both view and imagine two Gabor patches in each set. In Set A (Imagery Acquisition), participants view and imagine a left-ward and vertical patch, and are fear conditioned when imagining one of these patches. In Set B (Visual Acquisition), participants view and imagine a right-ward and horizontal patch, and are fear conditioned when viewing one of these patches. These sets will be discussed in reverse (Set B: Visual Acquisition then Set A: Imagery Acquisition) for ease of understanding. 
+
+
+These tasks allow for the investigation of 5 questions:
+
+1. To determine if participants fear condition to a viewed stimulus
+
+2. To determine if participants generalize this fear of a viewed stimulus to the corresponding imagined stimulus
+
+3. To determine if participants fear condition to an imagined stimulus
+
+4. To determine if participants generalize this fear to the corresponding viewed stimulus
+
+5. To determine if the fear acquired when viewing a stimulus is of similar magnitude to the fear acquired when imagining a stimulus
+
+
+This markdown is primarily to be used in order to determine which results to include in the main vs supplemental parts of the publication.
+Contact L for questions: lburle2@lsu.edu or lburleigh09@gmail.com
+
+```{r load data, include=FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2) 
+library(apaTables) 
+library(condir) # Bayes
+library(corrplot) 
+library(effectsize)
+library(ez) 
+library(ggcorrplot) 
+library(pastecs)
+library(reshape)
+library(ggpubr)
+
+## This portion reads in the CSV and specifies participants to include in analyses
+
+# setwd("C:/Users/larn_/OneDrive - Louisiana State University/R/FCTM_Bx_v1")
+# setwd() here is unnecessary for knitting the markdown but is here for ease of troubleshooting
+CSV <- read.csv("FCTM_Bx_df_stats.csv", header=TRUE, fileEncoding = "UTF-8")
+keep <- c("16012", "16094", "17074", "17097", "17102", "17108", "17111", "17112", "17124", "17127", "17133", "17144", "17145", "17146", "17155", "17194", "17230", "17238", "17239", "17241", "17247", "17271", "17284", "17293", "17294", "17295", "17467", "17473", "17498", "17513", "17519", "18008", "18020")
+CSV <- CSV[CSV$Subject_ID %in% keep, ]
+
+```
+
+
+# Likert-Style Questionnaire
+
+## Descriptive Statistics
+
+### Visual Acquisition (Set B) 
+
+``` {r Likert VA, echo = FALSE}
+CSVlikertVA <- CSV %>% select("B_vivid_Cspi", "B_vivid_Csmi", "B_effort_Cspi", "B_effort_Csmi", "B_fear_Cspi", "B_fear_Csmi", "B_fear_Cspv", "B_fear_Csmv")
+
+likertVA <- stat.desc(CSVlikertVA)
+print(likertVA)
+```
+### Imagery Acquisition (Set A) 
+
+``` {r Likert IA, echo = FALSE}
+CSVlikertIA <- CSV %>% select("A_vivid_Cspi", "A_vivid_Csmi", "A_effort_Cspi", "A_effort_Csmi", "A_fear_Cspi", "A_fear_Csmi", "A_fear_Cspv", "A_fear_Csmv")
+
+likertIA <- stat.desc(CSVlikertIA)
+print(likertIA)
+```
+
+## Analyses
+
+### Subjective Fear ANOVA
+
+``` {r, lik org, include = FALSE}
+longCSVlik <- CSV %>% select("Subject_ID", "A_fear_Cspv", "A_fear_Csmv",	"A_fear_Cspi",	"A_fear_Csmi","B_fear_Cspv", "B_fear_Csmv", "B_fear_Cspi", "B_fear_Csmi") %>%
+  pivot_longer(cols = c("A_fear_Cspv", "A_fear_Csmv",	"A_fear_Cspi",	"A_fear_Csmi","B_fear_Cspv", "B_fear_Csmv", "B_fear_Cspi", "B_fear_Csmi"),
+               names_to = "groups", values_to = "data") %>%
+  mutate(CS = case_when(grepl("Csp", groups) ~ "CSP",
+                        grepl("Csm", groups) ~ "CSM")) %>%
+  mutate(Percept = case_when(endsWith(groups, "v") ~ "View",
+                             endsWith(groups, "i") ~ "Imagine")) %>%
+  mutate(Phase = case_when(startsWith(groups, "A") ~ "A",
+                           startsWith(groups, "B") ~ "B"))
+```
+
+```{r lik aov, echo = FALSE}
+anovatbl <- ezANOVA(data=longCSVlik, dv = .(data), wid = .(Subject_ID), within = .(CS, Percept, Phase), type = 2, detailed = TRUE)
+
+table1 <- apa.ezANOVA.table(anovatbl, table.number = 1, filename = "likertanova.doc")
+print(anovatbl)
+```
+
+
+
+### Visualization
+```{r b lik graph, echo=FALSE}
+longB <- longCSVlik %>% filter(Phase == "B")
+
+blik <- ggplot(longB, aes(CS, data, fill= CS)) 
+blik <- blik + theme_bw() + stat_summary(fun = mean, geom = "bar", colour="Black") + stat_summary(fun.data =mean_cl_normal, geom = "errorbar", position = position_dodge(width=.9), width = .35) + scale_x_discrete(breaks=c("CSP","CSM"), labels = c("CS+","CS-")) + scale_fill_manual(values=c("#D43F3A", "#357EBD")) + labs(y = "Self-Reported Fear (1-7)", size = "N") + theme(axis.title.x = element_blank(), text = element_text(size=20)) + facet_grid(cols = vars(Percept)) + geom_count(color = "gray36") + theme(legend.position="none")
+
+ggsave(filename = "lik_VisAcq.tiff", plot = blik, height = 12, width = 11.6, units = "cm", device='tiff', dpi=300)
+
+longA <- longCSVlik %>% filter(Phase == "A")
+
+alik <- ggplot(longA, aes(CS, data, fill= CS)) 
+alik <- alik + theme_bw() + stat_summary(fun = mean, geom = "bar", colour="Black") + stat_summary(fun.data =mean_cl_normal, geom = "errorbar", position = position_dodge(width=.9), width = .35) + scale_x_discrete(breaks=c("CSP","CSM"), labels = c("CS+","CS-")) + scale_fill_manual(values=c("#EEA236", "#46B8DA"))  + theme(axis.title.x = element_blank(), text = element_text(size=20), axis.title.y = element_blank()) + facet_grid(~factor(Percept, levels=rev(unique(longA$Percept)))) + geom_count(color = "gray36") + guides(fill = "none")
+
+ggsave(filename = "Lik_ImgAcq.tiff", plot = alik, height = 12, width = 11.6, units = "cm", device='tiff', dpi=300)
+
+bothlik <- ggarrange(blik, alik, 
+            widths = c(0.5, .75),
+          ncol = 2, nrow = 1)
+ggsave(filename = "Lik_both.tiff", plot = bothlik, height = 10, width = 24, units = "cm", device='tiff', dpi=300)
+ggsave(filename = "Lik_both.png", plot = bothlik, height = 10, width = 24, units = "cm", device='png', dpi=300)
+
+print(bothlik)
+```
+
+
+\pagebreak
+# Three-way ANOVA Self-Report Follow-up tests
+
+## Visual Acquisition Primary Analyses (Set B)
+
+### Fear View
+```{r}
+t.test(data ~ groups, data = subset(longB, groups %in% c("B_fear_Cspv", "B_fear_Csmv")), paired=TRUE)
+cohens_d(longB$data[longB$groups == "B_fear_Cspv"], longB$data[longB$groups == "B_fear_Csmv"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+comp <- csCompare(CSV$B_fear_Cspv, CSV$B_fear_Csmv)
+comp
+interpret_bf(comp$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$B_fear_Cspv, CSV$B_fear_Csmv)
+sens
+csRobustnessPlot(CSV$B_fear_Cspv, CSV$B_fear_Csmv, BF01 = TRUE)
+```
+
+
+### Generalized Fear to Imagine
+```{r}
+t.test(data ~ groups, data = subset(longB, groups %in% c("B_fear_Cspi", "B_fear_Csmi")), paired=TRUE)
+cohens_d(longB$data[longB$groups == "B_fear_Cspi"], longB$data[longB$groups == "B_fear_Csmi"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+compi <- csCompare(CSV$B_fear_Cspi, CSV$B_fear_Csmi)
+compi
+interpret_bf(compi$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$B_fear_Cspi, CSV$B_fear_Csmi)
+print(sens)
+csRobustnessPlot(CSV$B_fear_Cspi, CSV$B_fear_Csmi, BF01 = TRUE)
+```
+
+## Imagery Acquisition Primary Analyses (Set A)
+
+### Fear Imagine
+```{r}
+t.test(data ~ groups, data = subset(longA, groups %in% c("A_fear_Cspi",	"A_fear_Csmi")), paired=TRUE)
+cohens_d(longA$data[longA$groups == "A_fear_Cspi"], longA$data[longA$groups == "A_fear_Csmi"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+compi <- csCompare(CSV$A_fear_Cspi, CSV$A_fear_Csmi)
+compi
+interpret_bf(compi$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sensi <- csSensitivity(CSV$A_fear_Cspi, CSV$A_fear_Csmi)
+print(sensi)
+csRobustnessPlot(CSV$A_fear_Cspi, CSV$A_fear_Csmi, BF01 = TRUE)
+```
+
+### Generalized Fear to View
+```{r}
+t.test(data ~ groups, data = subset(longA, groups %in% c("A_fear_Cspv", "A_fear_Csmv")), paired=TRUE)
+cohens_d(longA$data[longA$groups == "A_fear_Cspv"], longA$data[longA$groups == "A_fear_Csmv"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+comp <- csCompare(CSV$A_fear_Cspv, CSV$A_fear_Csmv)
+comp
+interpret_bf(comp$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$A_fear_Cspv, CSV$A_fear_Csmv)
+print(sens)
+csRobustnessPlot(CSV$A_fear_Cspv, CSV$A_fear_Csmv, BF01 = TRUE)
+```
+
+## Visual Acquisition Additional follow-ups (Set B)
+
+### CS+s
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("B_fear_Cspi", "B_fear_Cspv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "B_fear_Cspi"], longCSVlik$data[longCSVlik$groups == "B_fear_Cspv"], paired = TRUE)
+```
+
+### CS-s 
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("B_fear_Csmi", "B_fear_Csmv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "B_fear_Csmi"], longCSVlik$data[longCSVlik$groups == "B_fear_Csmv"], paired = TRUE)
+```
+
+
+## Imagery Acquisition Additional follow-ups (Set A)
+
+### CS+s
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Cspv", "A_fear_Cspi")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Cspv"], longCSVlik$data[longCSVlik$groups == "A_fear_Cspi"], paired = TRUE)
+```
+
+### CS-s
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Csmv", "A_fear_Csmi")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Csmv"], longCSVlik$data[longCSVlik$groups == "A_fear_Csmi"], paired = TRUE)
+```
+
+## Across Phase Analyses
+
+### CS+s
+Acquiring fear to an imagined vs a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Cspi", "B_fear_Cspv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Cspi"], longCSVlik$data[longCSVlik$groups == "B_fear_Cspv"], paired = TRUE)
+```
+
+Generalized fear to an imagined vs a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("B_fear_Cspi", "A_fear_Cspv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "B_fear_Cspi"], longCSVlik$data[longCSVlik$groups == "A_fear_Cspv"], paired = TRUE)
+```
+
+Fear acquired to a viewed stimulus vs fear generalized to a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Cspv", "B_fear_Cspv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Cspv"], longCSVlik$data[longCSVlik$groups == "B_fear_Cspv"], paired = TRUE)
+```
+
+Fear acquired to an imagined stimulus vs fear generalized to an imagined stimlus
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Cspi", "B_fear_Cspi")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Cspi"], longCSVlik$data[longCSVlik$groups == "B_fear_Cspi"], paired = TRUE)
+```
+
+
+### CS-s 
+Acquired percept modalities (CS- imagine Set A vs CS- view Set B)
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Csmi", "B_fear_Csmv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Csmi"], longCSVlik$data[longCSVlik$groups == "B_fear_Csmv"], paired = TRUE)
+```
+
+Generalized percept modalities (CS- imagine Set B vs CS- view Set A)
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("B_fear_Csmi", "A_fear_Csmv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "B_fear_Csmi"], longCSVlik$data[longCSVlik$groups == "A_fear_Csmv"], paired = TRUE)
+```
+
+Viewed CS-s
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Csmv", "B_fear_Csmv")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Csmv"], longCSVlik$data[longCSVlik$groups == "B_fear_Csmv"], paired = TRUE)
+```
+
+Imagined CS-s
+```{r}
+t.test(data ~ groups, data = subset(longCSVlik, groups %in% c("A_fear_Csmi", "B_fear_Csmi")), paired=TRUE)
+cohens_d(longCSVlik$data[longCSVlik$groups == "A_fear_Csmi"], longCSVlik$data[longCSVlik$groups == "B_fear_Csmi"], paired = TRUE)
+```
+
+### Vividness ANOVA
+Does the vividness from the self-report questionnaire impact ratings?
+```{r, include=FALSE}
+longviv <- CSV %>% select("Subject_ID", "B_vivid_Cspi", "B_vivid_Csmi", "A_vivid_Cspi", "A_vivid_Csmi") %>%
+  pivot_longer(cols = c("B_vivid_Cspi", "B_vivid_Csmi", "A_vivid_Cspi", "A_vivid_Csmi"), names_to = "groups", values_to = "data") %>%
+  mutate(CS = case_when(grepl("Csp", groups) ~ "CSP",
+                        grepl("Csm", groups) ~ "CSM")) %>%
+  mutate(Phase = case_when(startsWith(groups, "A") ~ "A",
+                           startsWith(groups, "B") ~ "B"))
+```
+
+```{r vivid aov, echo = FALSE}
+vividanov <- ezANOVA(data=longviv, dv = .(data), wid = .(Subject_ID), within = .(CS, Phase), type = 2, detailed = TRUE)
+print(vividanov)
+
+table7 <- apa.ezANOVA.table(vividanov, table.number = 7, filename = "vividnessanova.doc")
+```
+
+
+### Vividness t-test
+Is the average vividness greater than no visualizations?
+```{r vivid t}
+vivavg <- CSV %>% select("Subject_ID", "B_vivid_Cspi", "B_vivid_Csmi", "A_vivid_Cspi", "A_vivid_Csmi") %>% rowwise() %>%
+  mutate(avg = mean(c(B_vivid_Cspi, B_vivid_Csmi, A_vivid_Cspi, A_vivid_Csmi)))
+
+t.test(vivavg$avg, mu = 1, alternative = "two.sided")
+cohens_d(vivavg$avg)
+```
+
+\pagebreak
+# Skin Conductance Response (SCR)
+``` {r include = FALSE}
+CSVall <- subset(CSV, select = c("Subject_ID", "GSR_A_cCspv", "GSR_A_cCsmv", "GSR_A_cCspi", "GSR_A_cCsmi", "GSR_B_cCspv", "GSR_B_cCsmv", "GSR_B_cCspi", "GSR_B_cCsmi")) 
+
+## Edit look of database (melt function allows ANOVA to be run)
+longfctm.complete <- melt(CSVall, id = "Subject_ID", measured = c("GSR_A_cCspv", "GSR_A_cCsmv", "GSR_A_cCspi", "GSR_A_cCsmi", "GSR_B_cCspv", "GSR_B_cCsmv", "GSR_B_cCspi", "GSR_B_cCsmi"))
+names(longfctm.complete) <- c("Participant", "groups", "data")
+longfctm.complete$CS <- gl(2, 33, labels = c("CSP", "CSM"))
+longfctm.complete$Percept <- gl(2, 66, labels = c("View", "Imagine"))
+longfctm.complete$Phase <- gl(2, 132, labels = c("A", "B"))
+```
+
+## Descriptive Statistics
+```{r echo = FALSE}
+stat.desc(CSVall)
+```
+
+## 2x2x2 ANOVA
+```{r 2x2x2 gsr}
+anovatbl <- ezANOVA(data=longfctm.complete, dv = .(data), wid = .(Participant), within = .(CS, Percept, Phase), type = 2, detailed = TRUE)
+print(anovatbl)
+
+table2 <- apa.ezANOVA.table(anovatbl, table.number = 2, filename = "gsranova.doc")
+```
+
+### Visual Acquisition (Set B)
+```{r echo = FALSE}
+setB <- subset(CSV, select = c("Subject_ID", "GSR_B_cCspv", "GSR_B_cCsmv", "GSR_B_cCspi", "GSR_B_cCsmi"))
+longB <- melt(setB, id = "Subject_ID", measured = c("GSR_B_cCspv", "GSR_B_cCsmv", "GSR_B_cCspi", "GSR_B_cCsmi"))
+names(longB) <- c("Participant", "groups", "data")
+longB$CS <- gl(2, 33, labels = c("CSP", "CSM"))
+longB$Percept <- gl(2, 66, labels = c("View", "Imagine"))
+
+
+bgsrv <- ggplot(longB, aes(CS, data, fill= CS)) 
+bgsrv <- bgsrv + theme_bw() + stat_summary(fun = mean, geom = "bar", colour="Black") +  stat_summary(fun.data =mean_cl_normal, geom = "errorbar", position = position_dodge(width=.9), width = .35) + scale_x_discrete(breaks=c("CSP","CSM"), labels = c("CS+","CS-")) + scale_fill_manual(values=c("#D43F3A", "#357EBD")) + ggtitle("Visual Acquisition Phase") + theme(plot.title = element_text(size=14, hjust = .5), axis.title.x = element_blank(), axis.title.y = element_blank(), legend.position = "none", text = element_text(size=20)) + facet_grid(cols = vars(Percept)) + geom_jitter(width = .15, color = "gray36")
+bgsrv
+
+ggsave(filename = "GSR_VisAcq.tiff", plot = bgsrv, height = 12, width = 11.6, units = "cm", device='tiff', dpi=300)
+```
+
+### Imagery Acquisition (Set A)
+```{r, echo = FALSE}
+setA <- subset(CSV, select = c("Subject_ID", "GSR_A_cCspv", "GSR_A_cCsmv", "GSR_A_cCspi", "GSR_A_cCsmi"))
+longA <- melt(setA, id = "Subject_ID", measured = c("GSR_A_cCspv", "GSR_A_cCsmv", "GSR_A_cCspi", "GSR_A_cCsmi"))
+names(longA) <- c("Participant", "groups", "data")
+longA$CS <- gl(2, 33, labels = c("CSP", "CSM"))
+longA$Percept <- gl(2, 66, labels = c("View", "Imagine"))
+
+agsri <- ggplot(longA, aes(CS, data, fill= CS)) 
+agsri <- agsri + theme_bw() + stat_summary(fun = mean, geom = "bar", colour="Black") +  stat_summary(fun.data =mean_cl_normal, geom = "errorbar", position = position_dodge(width=.9), width = .35) + scale_x_discrete(breaks=c("CSP","CSM"), labels = c("CS+","CS-")) + scale_fill_manual(values=c("#EEA236", "#46B8DA")) + labs(y = "SCR") + ggtitle("Imagery Acquisition Phase") + theme(plot.title = element_text(size=14, hjust = .5), axis.title.x = element_blank(), legend.position = "none", text = element_text(size=20)) + facet_grid(~factor(Percept, levels=rev(unique(longA$Percept)))) + geom_jitter(width = .15, color = "gray36")
+agsri
+
+ggsave(filename = "GSR_ImgAcq.tiff", plot = agsri, height = 12, width = 11.6, units = "cm", device='tiff', dpi=300)
+```
+
+\pagebreak
+# Three-way ANOVA Skin Conductance Follow-up tests
+
+## Visual Acquisition Primary Analyses (Set B)
+
+### Fear View
+```{r}
+t.test(data ~ groups, data = subset(longB, groups %in% c("GSR_B_cCspv", "GSR_B_cCsmv")), paired=TRUE)
+cohens_d(longB$data[longB$groups == "GSR_B_cCspv"], longB$data[longB$groups == "GSR_B_cCsmv"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+comp <- csCompare(CSV$GSR_B_cCspv, CSV$GSR_B_cCsmv)
+comp
+interpret_bf(comp$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$GSR_B_cCspv, CSV$GSR_B_cCsmv)
+sens
+csRobustnessPlot(CSV$GSR_B_cCspv, CSV$GSR_B_cCsmv, BF01 = TRUE)
+```
+
+
+### Generalized Fear to Imagine
+```{r}
+t.test(data ~ groups, data = subset(longB, groups %in% c("GSR_B_cCspi", "GSR_B_cCsmi")), paired=TRUE)
+cohens_d(longB$data[longB$groups == "GSR_B_cCspi"], longB$data[longB$groups == "GSR_B_cCsmi"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+compi <- csCompare(CSV$GSR_B_cCspi, CSV$GSR_B_cCsmi)
+compi
+interpret_bf(compi$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$GSR_B_cCspi, CSV$GSR_B_cCsmi)
+print(sens)
+csRobustnessPlot(CSV$GSR_B_cCspi, CSV$GSR_B_cCsmi, BF01 = TRUE)
+```
+
+## Imagery Acquisition Primary Analyses (Set A)
+
+### Fear Imagine
+```{r}
+t.test(data ~ groups, data = subset(longA, groups %in% c("GSR_A_cCspi", "GSR_A_cCsmi")), paired=TRUE)
+cohens_d(longA$data[longA$groups == "GSR_A_cCspi"], longA$data[longA$groups == "GSR_A_cCsmi"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+compi <- csCompare(CSV$GSR_A_cCspi, CSV$GSR_A_cCsmi)
+compi
+interpret_bf(compi$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sensi <- csSensitivity(CSV$GSR_A_cCspi, CSV$GSR_A_cCsmi)
+print(sensi)
+csRobustnessPlot(CSV$GSR_A_cCspi, CSV$GSR_A_cCsmi, BF01 = TRUE)
+```
+
+### Generalized Fear to View
+```{r}
+t.test(data ~ groups, data = subset(longA, groups %in% c("GSR_A_cCspv", "GSR_A_cCsmv")), paired=TRUE)
+cohens_d(longA$data[longA$groups == "GSR_A_cCspv"], longA$data[longA$groups == "GSR_A_cCsmv"], paired = TRUE)
+```
+
+#### Bayesian Test
+```{r, echo = FALSE}
+comp <- csCompare(CSV$GSR_A_cCspv, CSV$GSR_A_cCsmv)
+comp
+interpret_bf(comp$bayes.results$bf10, include_value = TRUE)
+```
+
+Sensitivity + Robustness
+```{r, echo = FALSE}
+sens <- csSensitivity(CSV$GSR_A_cCspv, CSV$GSR_A_cCsmv)
+print(sens)
+csRobustnessPlot(CSV$GSR_A_cCspv, CSV$GSR_A_cCsmv, BF01 = TRUE)
+```
+
+## Visual Acquisition Additional follow-ups (Set B)
+
+### CS+s
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_B_cCspi", "GSR_B_cCspv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspv"], paired = TRUE)
+```
+
+### CS-s 
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_B_cCsmi", "GSR_B_cCsmv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmv"], paired = TRUE)
+```
+
+
+## Imagery Acquisition Additional follow-ups (Set A)
+
+### CS+s
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCspi", "GSR_A_cCspv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspi"], longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspv"], paired = TRUE)
+```
+
+### CS-s
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCsmi", "GSR_A_cCsmv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmi"], longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmv"], paired = TRUE)
+```
+
+## Across Phase Analyses
+
+### CS+s
+Acquiring fear to an imagined vs a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCspi", "GSR_B_cCspv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspv"], paired = TRUE)
+```
+
+Generalized fear to an imagined vs a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_B_cCspi", "GSR_A_cCspv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspi"], longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspv"], paired = TRUE)
+```
+
+Fear acquired to a viewed stimulus vs fear generalized to a viewed stimulus
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCspv", "GSR_B_cCspv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspv"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspv"], paired = TRUE)
+```
+
+Fear acquired to an imagined stimulus vs fear generalized to an imagined stimulus
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCspi", "GSR_B_cCspi")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCspi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCspi"], paired = TRUE)
+```
+
+
+### CS-s 
+Acquired percept modalities (CS- imagine Set A vs CS- view Set B)
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCsmi", "GSR_B_cCsmv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmv"], paired = TRUE)
+```
+
+Generalized percept modalities (CS- imagine Set B vs CS- view Set A)
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_B_cCsmi", "GSR_A_cCsmv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmi"], longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmv"], paired = TRUE)
+```
+
+Viewed CS-s
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCsmv", "GSR_B_cCsmv")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmv"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmv"], paired = TRUE)
+```
+
+Imagined CS-s
+```{r}
+t.test(data ~ groups, data = subset(longfctm.complete, groups %in% c("GSR_A_cCsmi", "GSR_B_cCsmi")), paired=TRUE)
+cohens_d(longfctm.complete$data[longfctm.complete$groups == "GSR_A_cCsmi"], longfctm.complete$data[longfctm.complete$groups == "GSR_B_cCsmi"], paired = TRUE)
+```
+
+\pagebreak
+# Pretty Correlation Graphs for Funsies
+
+## Visual Acquisition 
+```{r, include=FALSE}
+CSVcorr <- CSV %>% select("Subject_ID", "GSR_B_cCspv", "GSR_B_cCsmv", "GSR_B_cCspi", "GSR_B_cCsmi", "B_fear_Cspv", "B_fear_Csmv", "B_fear_Cspi", "B_fear_Csmi", "B_vivid_Cspi", "B_vivid_Csmi", "B_effort_Cspi", "B_effort_Csmi","TAI_Score", "SAI_Score", "Attentional_Control", "VVIQ_Score") %>%
+  rowwise() %>%
+  mutate(gsrviewdiff = GSR_B_cCspv - GSR_B_cCsmv,
+         gsrimagdiff = GSR_B_cCspi - GSR_B_cCsmi,
+         likviewdiff = B_fear_Cspv - B_fear_Csmv,
+         likimagdiff = B_fear_Cspi - B_fear_Csmi,
+         vivid_avg = mean(c(B_vivid_Cspi, B_vivid_Csmi)),
+         effort_avg = mean(c(B_effort_Cspi, B_effort_Csmi))) %>%
+  select("gsrviewdiff", "gsrimagdiff", "likviewdiff", "likimagdiff", 
+         "vivid_avg", "effort_avg", "TAI_Score", "SAI_Score",
+         "Attentional_Control", "VVIQ_Score") %>%
+  dplyr::rename("SCR View Differential Fear" = gsrviewdiff, 
+         "SCR Imagine Differential Fear" = gsrimagdiff, 
+         "Self Report View Differential Fear" = likviewdiff, 
+         "Self Report Imagine Differential Fear" = likimagdiff,
+         "Self Report Vividness" = vivid_avg, 
+         "Self Report Effort" = effort_avg, 
+         "Trait Anxiety" = TAI_Score, 
+         "State Anxiety" = SAI_Score, 
+         "Attentional Control" = Attentional_Control,
+         "Visual Vividness (VVIQ)" = VVIQ_Score)
+corrs <- cor(na.omit(CSVcorr))
+pvals <- cor_pmat(CSVcorr)
+
+```
+
+```{r}
+col1 <- colorRampPalette(c("#357EBDFF", "#46B8DAFF", "#5CB85CFF", "#EEA236FF", "#D43F3AFF"))
+
+corrplot(corrs, cl.ratio = .19, type = "upper", tl.cex = .8, tl.col = "black", diag = FALSE, number.cex = .6, p.mat = pvals, insig = "label_sig", sig.level = c(.001, 0.01, .05), pch.cex = .9, col = col1(10))
+```
+
+## Imagery Acquisition
+```{r, include=FALSE}
+CSVcorr <- subset(CSV, select = c("Subject_ID", "GSR_A_cCspv", "GSR_A_cCsmv", "GSR_A_cCspi", "GSR_A_cCsmi", "A_fear_Cspv", "A_fear_Csmv", "A_fear_Cspi", "A_fear_Csmi")) 
+CSVlikA <- subset(CSV, select = c("Subject_ID", "A_vivid_Cspi", "A_vivid_Csmi", "A_effort_Cspi", "A_effort_Csmi"))
+
+CSVcorrdiff <- data.frame(Subject_ID = CSVcorr$Subject_ID)
+
+CSVcorrdiff$gsrviewdiff <- CSVcorr$GSR_A_cCspv - CSVcorr$GSR_A_cCsmv
+CSVcorrdiff$gsrimagdiff <- CSVcorr$GSR_A_cCspi - CSVcorr$GSR_A_cCsmi
+CSVcorrdiff$likviewdiff <- CSVcorr$A_fear_Cspv - CSVcorr$A_fear_Csmv
+CSVcorrdiff$likimagdiff <- CSVcorr$A_fear_Cspi - CSVcorr$A_fear_Csmi
+
+other <- subset(CSV, select = c("Subject_ID", "TAI_Score", "SAI_Score", "Attentional_Control", "VVIQ_Score"))
+CSVcorrdiff <- merge(CSVcorrdiff, other, by = "Subject_ID")
+
+vviq <- subset(CSV, select = c("Subject_ID", "VVIQ_Score"))
+CSVlikA$A_vivid_avg <- rowMeans(CSVlikA[ , (c("A_vivid_Cspi", "A_vivid_Csmi"))])
+CSVlikA$A_effort_avg <- rowMeans(CSVlikA[ , (c("A_effort_Cspi", "A_effort_Csmi"))])
+lik <- subset(CSVlikA, select = c("Subject_ID", "A_vivid_avg", "A_effort_avg"))
+
+CSVcorrdiff <- merge(CSVcorrdiff, lik, by = "Subject_ID")
+
+CSVcorrdiff <- subset(CSVcorrdiff, select = -c(Subject_ID))
+
+corrdiff <- cor(na.omit(CSVcorrdiff))
+pvaldiff <- cor_pmat(corrdiff)
+
+```
+
+
+```{r include = FALSE}
+colnames(corrdiff) <- c("View Difference-SCR", "Imagine Difference-SCR", "View Difference- Self-Report", "Imagine Difference- Self-Report", "Trait Anxiety Inventory", "State Anxiety Inventory", "Attentional Control", "VVIQ", "Self-Reported Vividness", "Self-Reported Effort")
+
+rownames(corrdiff) <- c("View Difference-SCR", "Imagine Difference-SCR", "View Difference- Self-Report", "Imagine Difference- Self-Report", "Trait Anxiety Inventory", "State Anxiety Inventory", "Attentional Control", "VVIQ", "Self-Reported Vividness", "Self-Reported Effort")
+
+colnames(pvaldiff) <- c("View Difference-SCR", "Imagine Difference-SCR", "View Difference- Self-Report", "Imagine Difference- Self-Report", "Trait Anxiety Inventory", "State Anxiety Inventory", "Attentional Control", "VVIQ", "Self-Reported Vividness", "Self-Reported Effort")
+
+rownames(pvaldiff) <- c("View Difference-SCR", "Imagine Difference-SCR", "View Difference- Self-Report", "Imagine Difference- Self-Report", "Trait Anxiety Inventory", "State Anxiety Inventory", "Attentional Control", "VVIQ", "Self-Reported Vividness", "Self-Reported Effort")
+
+```
+
+
+```{r}
+col1 <- colorRampPalette(c("#357EBDFF", "#46B8DAFF", "#5CB85CFF", "#EEA236FF", "#D43F3AFF"))
+
+corrplot(corrdiff, cl.ratio = .19, type = "upper", tl.cex = .8, tl.col = "black", diag = FALSE, number.cex = .6, p.mat = pvaldiff, insig = "label_sig", sig.level = c(.001, 0.01, .05), pch.cex = .9, col = col1(10))
+```
